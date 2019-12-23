@@ -1,0 +1,18 @@
+# macOS files
+.DS_Store
+._*
+__MACOSX
+# Swap files
+*.swp
+# Python cache
+*.pyc
+__pycache__
+
+# Python virtual environment
+venv
+# Python egg files
+*.egg-info
+.egg
+# Python distribution files
+build
+dist
