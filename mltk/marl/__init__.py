@@ -1,2 +1,2 @@
-from .agent import MARLAlgorithm, MultiAgents, MARLAgent
+from .agent import *
 from .envs import *

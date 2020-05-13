@@ -9,7 +9,6 @@ from gym import Env
 from gym.spaces import Discrete, MultiDiscrete
 
 from mltk import util as mu
-from mltk.marl import DiscreteEnv
 
 __all__ = [
     "RandomMDPEnv"

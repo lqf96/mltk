@@ -1,6 +1,7 @@
-from typing import Any, Optional, Collection, Tuple
+from typing import Any, Union, Optional, Collection, Tuple
 from abc import ABC, abstractmethod
 
+import torch as th
 from torch.distributions import Distribution
 from gym import Env
 from gym.spaces import MultiDiscrete, Tuple as TupleSpace
@@ -10,7 +11,7 @@ from mltk.rl import RLAgent, Step, Transition
 
 __all__ = [
     "MARLAlgorithm",
-    "MultiAgents",
+    "AgentsGroup",
     "MARLAgent",
     "n_agents",
     "joint_action_shape",
@@ -18,7 +19,7 @@ __all__ = [
 ]
 
 def n_agents(env: Env) -> int:
-    """ Get number of agents in the game. """
+    """ Number of agents in the game. """
     action_space = env.action_space
 
     # Tuple action space
@@ -34,6 +35,7 @@ def n_agents(env: Env) -> int:
         )
 
 def joint_action_shape(env: Env) -> Tuple[int]:
+    """ Shape of discrete joint action space. """
     action_space = env.action_space
 
     # Tuple action space
@@ -44,9 +46,9 @@ def joint_action_shape(env: Env) -> Tuple[int]:
         return tuple(action_space.nvec)
     # Unsupported action space
     else:
-        raise TypeError("Action space {} has unknown discrete space type {}".format(
-            action_space, action_space.__class__
-        ))
+        raise TypeError(
+            f"Action space {action_space} has unknown space type {action_space.__class__}"
+        )
 
 def reduction_dims(n_agents: int, exclude_agent: Optional[int] = None):
     # Reduction dimensions
@@ -68,24 +70,29 @@ class MARLAlgorithm(RLAgent):
 
     joint_action_shape = property(lambda self: joint_action_shape(self.env))
 
-class MultiAgents(MARLAlgorithm):
-    def __init__(self, agents: Collection["MARLAgent"]):
+class AgentsGroup(MARLAlgorithm):
+    def __init__(self, agents: Collection["MARLAgent"], joint_training: bool = False):
         ## All agents
         self.agents = agents
+        ## Joint training flag
+        self.joint_training = joint_training
 
-    def fit(self, step: Step, transition: Transition):
+        # Override each agent's setting
+        for agent in agents:
+            agent.joint_training = joint_training
+
+    def policy(self, obs, **kwargs):
+        raise NotImplementedError
+
+    def act(self, obs, **kwargs):
+        return tuple((agent.act(obs, **kwargs) for agent in self.agents))
+
+    def update(self, step: Step, transition: Transition):
         agents = self.agents
 
         for agent in agents:
             all_agents = agents if self.joint_training else None
-            agent.fit(step=step, transition=transition, all_agents=all_agents)
-
-    def update(self, step: Step):
-        agents = self.agents
-
-        for agent in agents:
-            all_agents = agents if self.joint_training else None
-            agent.update(step=step, all_agents=all_agents)
+            agent.update(step=step, transition=transition, all_agents=all_agents)
 
 class MARLAgent(RLAgent):
     def __init__(self, index: int, joint_training: bool = False, **kwargs: Any):
@@ -95,11 +102,8 @@ class MARLAgent(RLAgent):
         ## Whether all agents are trained jointly or not
         self.joint_training = joint_training
 
-    def fit(self, step: Step, transition: Transition,
+    def update(self, step: Step, transition: Transition,
         all_agents: Optional[Tuple["MARLAgent"]] = None):
-        raise NotImplementedError
-
-    def update(self, step: Step, all_agents: Optional[Tuple["MARLAgent"]] = None):
         raise NotImplementedError
 
     n_agents = property(lambda self: n_agents(self.env))

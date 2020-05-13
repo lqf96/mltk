@@ -1,44 +1,87 @@
-from typing import Awaitable, Generator, Any
-from mltk.typing import T
+from typing import Optional, Awaitable, Any, Set
+from mltk.types import T
 
-import asyncio, functools
-from asyncio import AbstractEventLoop, Future
+import asyncio as aio
+from functools import partial
+from asyncio import AbstractEventLoop, Future, Task
 
 __all__ = [
-    "spawn_task",
+    "create_bg_task",
     "set_immediate",
-    "delay",
     "resolved",
     "rejected"
 ]
 
-def spawn_task(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        asyncio.create_task(func(*args, **kwargs))
-    return wrapper
+def _remove_bg_task(task_set: Set["Task[T]"], task: "Task[T]"):
+    error = task.exception()
+    # Task is rejected with error
+    if error is not None:
+        raise error
+    
+    # Remove task from task set
+    task_set.remove(task)
+
+def create_bg_task(task_set: Set["Task[T]"], awaitable: Awaitable[T], *,
+    loop: Optional[AbstractEventLoop] = None) -> "Task[T]":
+    """\
+    Creates and returns a background task from an awaitable object.
+
+    The task is stored in the provided task set to avoid being garbage collected.
+    It is automatically removed from the task set when fulfilled.
+
+    Args:
+        task_set: Task set to store background tasks.
+        awaitable: Awaitable object to create background task from.
+        loop: The AsyncIO event loop to use.
+    
+    Returns:
+        The background task object.
+    """
+    if loop is None:
+        loop = aio.get_event_loop()
+
+    # Create task from the awaitable
+    task = loop.create_task(awaitable)
+    # Store the task in the task set (to avoid being garbage collected)
+    task_set.add(task)
+    # Remove the task from the task set when it is done
+    task.add_done_callback(partial(_remove_bg_task, task_set=task_set))
+
+    return task
 
 def set_immediate(loop: Optional[AbstractEventLoop] = None) -> "Future[None]":
-    if loop is None:
-        loop = asyncio.get_event_loop()
+    """\
+    Create a future that will be resolved on the next tick of the event loop.
+
+    Args:
+        loop: The AsyncIO event loop to use.
     
-    f = loop.create_future()
-    loop.call_soon(f.set_result, None)
-    return f
-
-def delay(interval: float, loop: Optional[AbstractEventLoop] = None) -> "Future[None]":
+    Returns:
+        A future that will be resolved on the next tick of the event loop.
+    """
     if loop is None:
-        loop = asyncio.get_event_loop()
+        loop = aio.get_event_loop()
+    
+    future = loop.create_future()
+    # Use "call_soon" to provide the "next tick" semantics
+    loop.call_soon(future.set_result, None)
 
-    f = loop.create_future()
-    loop.call_later(interval, f.set_result, None)
-    return f
+    return future
 
 async def resolved(value: T) -> T:
-    """ Return a coroutine that yields given value. """
+    """\
+    Create a coroutine that is resolved with given value.
+
+    Returns:
+        A coroutine resolved with given value.
+    """
     return value
 
 async def rejected(error: Exception) -> Any:
-    """ Return a coroutine that raises given exception. """
-    raise error
+    """\
+    Create a coroutine that is rejected with given error.
 
+    Returns:
+        A coroutine rejected with given error.
+    """
+    raise error

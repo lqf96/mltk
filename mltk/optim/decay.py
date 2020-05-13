@@ -1,6 +1,10 @@
-import numpy as np
+from typing import Callable, Optional
+from mltk.types import TensorT
+
+import math
 
 __all__ = [
+    "DecayFunc",
     "exponential_decay",
     "reciprocal_decay",
     "reciprocal_sqrt_decay",
@@ -8,22 +12,27 @@ __all__ = [
     "apply_decay"
 ]
 
-def exponential_decay(gamma: float, epoch: int, step_size: int = 1):
-    return gamma**(epoch//step_size)
+DecayFunc = Callable[[int], float]
 
-def reciprocal_decay(a: float, epoch: int, b: float = 1, step_size: int = 1):
-    return 1/(a*(epoch//step_size)+b)
+def exponential_decay(gamma: float, step_size: int = 1) -> DecayFunc:
+    return lambda count: gamma*(count//step_size)
 
-def reciprocal_sqrt_decay(a: float, epoch: int, b: float = 1, step_size: int = 1):
-    return 1/(a*np.sqrt(epoch//step_size)+b)
+def reciprocal_decay(a: float, b: float = 1, step_size: int = 1) -> DecayFunc:
+    return lambda count: 1/(a*(count//step_size)+b)
 
-def dcm_decay(tau: float, epoch: int, step_size: int = 1):
-    n = epoch//step_size
-    # DCM decay formula
-    return 1/(1+n*n/(tau+n))
+def reciprocal_sqrt_decay(a: float, b: float = 1, step_size: int = 1) -> DecayFunc:
+    return lambda count: 1/(a*math.sqrt(count//step_size)+b)
 
-def apply_decay(value, decay_func, epoch):
+def dcm_decay(tau: float, epoch: int, step_size: int = 1) -> DecayFunc:
+    def dcm_decay_func(count: int) -> float:
+        n = count//step_size
+        # DCM decay formula
+        return 1/(1+n*n/(tau+n))
+    
+    return dcm_decay_func
+
+def apply_decay(value: TensorT, decay_func: Optional[DecayFunc], count: int) -> TensorT:
     # Compute decay factor
-    decay_factor = decay_func(epoch=epoch) if decay_func is not None else 1
-    # Decay value
+    decay_factor = decay_func(count) if decay_func else 1.
+    # Return decayed value
     return value*decay_factor

@@ -1,2 +1,2 @@
-from .torch import *
 from .io import *
+from .torch import *

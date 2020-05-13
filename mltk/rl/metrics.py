@@ -1,40 +1,46 @@
-from typing import Any, Optional, Generator
+from mltk.types.gym import O, A, R
 
-from enum import Enum
-
-from ignite.engine import Events
-from ignite.metrics import Metric
-
-from mltk.metrics import GeneratorMetric, OneshotMetric
-from mltk import util
+from mltk.engine import Events
+from mltk.engine.metrics import GeneratorMetric
+from .execution import EPISODE_STARTED, EPISODE_COMPLETED, RLState
 
 __all__ = [
     "episode_length",
     "episode_reward"
 ]
 
-@GeneratorMetric.wraps()
-def episode_length() -> int:
-    count = 0
-    # Episode loop
+@GeneratorMetric.wraps(triggers={
+    "reset": EPISODE_STARTED,
+    "update": Events.ITER_COMPLETED,
+    "record": EPISODE_COMPLETED
+})
+def episode_length():
+    length = 0
+    state = yield length # type: RLState[O, A, R]
+    
     while True:
-        output = yield
         # End of episode
-        if output is None:
-            break
-        count += 1
-    return count
+        if state is None:
+            return
+        
+        length += 1
+        # Yield updated episode length
+        state = yield length
 
-@GeneratorMetric.wraps()
+@GeneratorMetric.wraps(triggers={
+    "reset": EPISODE_STARTED,
+    "update": Events.ITER_COMPLETED,
+    "record": EPISODE_COMPLETED
+})
 def episode_reward(discount_factor: float = 1):
-    total_reward = 0
-    # Episode loop
+    retn = 0.
+    state = yield retn # type: RLState[O, A, R]
+
     while True:
-        output = yield
         # End of episode
-        if output is None:
-            break
-        # Update total reward
-        total_reward *= discount_factor
-        total_reward += output.transition.reward
-    return total_reward
+        if state is None:
+            return
+        
+        retn = discount_factor*retn+state.transition.reward
+        # Yield updated (discounted) return
+        state = yield retn
