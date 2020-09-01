@@ -35,5 +35,6 @@ class StochasticPolicy(Policy[np.ndarray]):
     
     def sample(self) -> np.ndarray:
         with mu.use_rand(self.rand):
-            actions: th.Tensor = self.dist.sample(()) # type: ignore
-        return actions.cpu().numpy()
+            actions: th.Tensor = self.dist.sample(()).cpu() # type: ignore
+        # Convert actions to scalar or NumPy array
+        return actions.item() if mu.isscalar(actions) else actions.numpy()

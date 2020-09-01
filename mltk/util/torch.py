@@ -20,6 +20,7 @@ __all__ = [
     "zip_params"
 ]
 
+# A mapping from NumPy data type names to PyTorch data type
 _DTYPE_MAP = {
     "int8": th.int8,
     "int16": th.int16,
@@ -33,7 +34,7 @@ _DTYPE_MAP = {
     "complex64": th.complex64,
     "complex128": th.complex128
 }
-
+# PyTorch random seed bit mask
 _SEED_MASK = 0x00ff_ffff_ffff_ffff
 
 def as_th_dtype(dtype: np.dtype) -> th.dtype:
@@ -62,7 +63,7 @@ def force_float(dtype: th.dtype, target_dtype: th.dtype) -> th.dtype:
     return target_dtype if dtype.is_floating_point else dtype
 
 def isscalar(tensor: th.Tensor) -> bool:
-    return tensor.dim==0
+    return tensor.ndim==0
 
 def one_hot(labels: th.Tensor, n: int) -> th.Tensor:
     return th.eye(n, device=labels.device)[labels]
