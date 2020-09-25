@@ -39,6 +39,9 @@ class Deque():
         # Copy valid data to new buffer
         self.view()[:] = data
 
+    # Deque is not hashable
+    __hash__ = None
+
     def __len__(self) -> int:
         return self._end-self._begin
     
@@ -67,6 +70,10 @@ class Deque():
     @property
     def shape(self) -> th.Size:
         return self.view().shape
+    
+    @property
+    def device(self) -> th.device:
+        return self._buf.device
 
     def append(self, new_elem):
         # Convert new element to PyTorch tensor

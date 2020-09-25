@@ -99,8 +99,8 @@ class ReplayBuffer():
         # 1) Sequences have no more than `n_mem_steps` of memory steps for building up the
         #    hidden state for a recurrent network.
         # 2) Sequences have no more than `n_loss_steps` of loss steps for computing RL losses.
-        # 3) Sequences are bounded between consecutive episode end steps (inclusive for both
-        #    ends of sequences).
+        # 3) Sequences are bounded between neighboring episode end steps (exclusive at the
+        #    beginning and inclusive at the end)
         for _ in range(n_seqs):
             # Sample sequence middle index
             seq_mid_index = th.randint(
@@ -116,7 +116,7 @@ class ReplayBuffer():
             try:
                 seq_begin_index = next(episode_end_steps.irange(
                     seq_mid_steps-n_mem_steps, seq_mid_steps, reverse=True
-                ))-offset
+                ))-offset+1
             except StopIteration:
                 seq_begin_index = seq_mid_index-n_mem_steps
             # Sequence end index

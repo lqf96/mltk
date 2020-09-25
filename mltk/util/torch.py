@@ -5,9 +5,9 @@ from contextlib import contextmanager
 
 import numpy as np
 import torch as th
-from torch.nn import Module
 
 __all__ = [
+    "SLICE_ALL",
     "as_th_dtype",
     "as_size",
     "as_device",
@@ -36,6 +36,8 @@ _DTYPE_MAP = {
 }
 # PyTorch random seed bit mask
 _SEED_MASK = 0x00ff_ffff_ffff_ffff
+
+SLICE_ALL = slice(None)
 
 def as_th_dtype(dtype: np.dtype) -> th.dtype:
     return _DTYPE_MAP[dtype.name]
