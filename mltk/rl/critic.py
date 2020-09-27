@@ -8,7 +8,7 @@ __all__ = [
 def n_step_return(rewards, value_next, discount_factor):
     raise NotImplementedError
 
-def lambda_return(rewards, values_next, discount_factor, lambda_, *, n: Optional[int] = None):
+def lambda_return(rewards, values_next, discount_factor, lambda_, *, n = None):
     # Infer number of steps from inputs
     if n is None:
         n = len(rewards)

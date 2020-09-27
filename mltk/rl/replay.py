@@ -36,17 +36,11 @@ class ReplayBuffer():
         ) # type: ignore
         # Create replay data buffer from the schema
         self.buf = buf = RecDeque.from_schema(replay_schema, max_len=capacity)
-        # Add an initial dummy step to the buffer
-        buf.append(
-            observation=th.zeros(obs_space.shape),
-            done=True,
-            **end_defaults
-        )
 
         # Number of steps in the replay buffer
-        self._n_steps = 1
+        self._n_steps = 0
         # Steps of episode ends
-        self._episode_end_steps = SortedList([0])
+        self._episode_end_steps = SortedList()
     
     @property
     def capacity(self) -> int:
@@ -81,57 +75,30 @@ class ReplayBuffer():
             self._episode_end_steps.add(self._n_steps)
             self._n_steps += 1
     
-    def sample_seqs(self, n_seqs: int, n_front_steps: int, n_back_steps: int
-        ) -> List[Tuple[int, int, int]]:
+    def sample_seqs(self, n_seqs: int, seq_len: int) -> List[Tuple[int, int]]:
         rand = self.rand
         buf = self.buf
         episode_end_steps = self._episode_end_steps
 
-        # Current replay buffer size
-        buf_len = len(buf)
         # Offset between number of steps and indices
-        offset = self._n_steps-buf_len
+        offset = self._n_steps-len(buf)
+        # Maximum sequence begin index
+        seq_begin_max = len(buf)-seq_len
 
-        seq_indices = []
-        # Sample given number of sequences; each sequence satisfies following properties:
-        # 1) Sequences have no more than `n_front_steps` of memory steps for building up the
-        #    hidden state for a recurrent network.
-        # 2) Sequences have no more than `n_back_steps` of loss steps for computing RL losses.
-        # 3) Sequences are bounded between neighboring episode end steps (exclusive at the
-        #    beginning and inclusive at the end)
-        n_seqs_generated = 0
-        while n_seqs_generated<n_seqs:
-            # Sample sequence middle index
-            seq_mid_index = th.randint(
-                n_front_steps, buf_len-n_back_steps, (), generator=rand
-            ).item() # type: ignore
-            # Number of steps for sequence middle
-            seq_mid_steps = seq_mid_index+offset
+        seq_ranges: List[Tuple[int, int]] = []
+        # Sample given number of sequence indices
+        while len(seq_ranges)<n_seqs:
+            # Sample potential sequence range
+            seq_begin_index = th.randint(0, seq_begin_max, (), generator=rand).item()
+            seq_end_index = seq_begin_index+seq_len
             
-            # Sequence begin index
-            try:
-                seq_begin_index = next(episode_end_steps.irange(
-                    seq_mid_steps-n_front_steps, seq_mid_steps, reverse=True
-                ))-offset+1
-                # Front sequence should have at least one step
-                if seq_begin_index>=seq_mid_index:
-                    continue
-            except StopIteration:
-                seq_begin_index = seq_mid_index-n_front_steps
-            # Sequence end index
-            try:
-                seq_end_index = next(episode_end_steps.irange(
-                    seq_mid_steps, seq_mid_steps+n_back_steps-1
-                ))-offset+1
-                # Back sequence should have at least two steps
-                if seq_end_index<seq_mid_index+2:
-                    continue
-            except StopIteration:
-                seq_end_index = seq_mid_index+n_back_steps
-            
-            # Update number of sequences generated
-            n_seqs_generated += 1
-            # Store sequence indices
-            seq_indices.append((seq_begin_index, seq_mid_index, seq_end_index))
+            # Ignore sequence if it spans across multiple episodes
+            episode_end_steps = next(episode_end_steps.irange(
+                seq_begin_index+offset, seq_end_index+offset-1, inclusive=(True, False)
+            ), None)
+            if episode_end_steps is not None:
+                continue
+            # Store sequence range
+            seq_ranges.append((seq_begin_index, seq_end_index))
 
-        return seq_indices
+        return seq_ranges
