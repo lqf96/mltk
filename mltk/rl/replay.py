@@ -39,7 +39,6 @@ class ReplayBuffer():
         # Add an initial dummy step to the buffer
         buf.append(
             observation=th.zeros(obs_space.shape),
-            reward=0.,
             done=True,
             **end_defaults
         )
@@ -75,7 +74,6 @@ class ReplayBuffer():
             # Add a dummy step for end of the episode
             buf.append(
                 observation=transition.next_observation,
-                reward=0.,
                 done=True,
                 **self.end_defaults
             )
@@ -83,7 +81,7 @@ class ReplayBuffer():
             self._episode_end_steps.add(self._n_steps)
             self._n_steps += 1
     
-    def sample_seqs(self, n_seqs: int, n_mem_steps: int, n_loss_steps: int
+    def sample_seqs(self, n_seqs: int, n_front_steps: int, n_back_steps: int
         ) -> List[Tuple[int, int, int]]:
         rand = self.rand
         buf = self.buf
@@ -96,37 +94,43 @@ class ReplayBuffer():
 
         seq_indices = []
         # Sample given number of sequences; each sequence satisfies following properties:
-        # 1) Sequences have no more than `n_mem_steps` of memory steps for building up the
+        # 1) Sequences have no more than `n_front_steps` of memory steps for building up the
         #    hidden state for a recurrent network.
-        # 2) Sequences have no more than `n_loss_steps` of loss steps for computing RL losses.
+        # 2) Sequences have no more than `n_back_steps` of loss steps for computing RL losses.
         # 3) Sequences are bounded between neighboring episode end steps (exclusive at the
         #    beginning and inclusive at the end)
-        for _ in range(n_seqs):
+        n_seqs_generated = 0
+        while n_seqs_generated<n_seqs:
             # Sample sequence middle index
             seq_mid_index = th.randint(
-                n_mem_steps+1, buf_len-n_loss_steps, (), generator=rand
+                n_front_steps, buf_len-n_back_steps, (), generator=rand
             ).item() # type: ignore
-            # Adjust index for end step of an episode
-            if buf.done[seq_mid_index]:
-                seq_mid_index -= 1
             # Number of steps for sequence middle
             seq_mid_steps = seq_mid_index+offset
             
             # Sequence begin index
             try:
                 seq_begin_index = next(episode_end_steps.irange(
-                    seq_mid_steps-n_mem_steps, seq_mid_steps, reverse=True
+                    seq_mid_steps-n_front_steps, seq_mid_steps, reverse=True
                 ))-offset+1
+                # Front sequence should have at least one step
+                if seq_begin_index>=seq_mid_index:
+                    continue
             except StopIteration:
-                seq_begin_index = seq_mid_index-n_mem_steps
+                seq_begin_index = seq_mid_index-n_front_steps
             # Sequence end index
             try:
                 seq_end_index = next(episode_end_steps.irange(
-                    seq_mid_steps, seq_mid_steps+n_loss_steps
-                ))-offset
+                    seq_mid_steps, seq_mid_steps+n_back_steps-1
+                ))-offset+1
+                # Back sequence should have at least two steps
+                if seq_end_index<seq_mid_index+2:
+                    continue
             except StopIteration:
-                seq_end_index = seq_mid_index+n_loss_steps
+                seq_end_index = seq_mid_index+n_back_steps
             
+            # Update number of sequences generated
+            n_seqs_generated += 1
             # Store sequence indices
             seq_indices.append((seq_begin_index, seq_mid_index, seq_end_index))
 

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 
 import numpy as np
 import torch as th
+from torch.distributions import LowRankMultivariateNormal
 
 __all__ = [
     "SLICE_ALL",
@@ -14,6 +15,7 @@ __all__ = [
     "derive_rand",
     "force_float",
     "isscalar",
+    "multivariate_normal_diag",
     "one_hot",
     "rand_bool",
     "use_rand",
@@ -34,8 +36,8 @@ _DTYPE_MAP = {
     "complex64": th.complex64,
     "complex128": th.complex128
 }
-# PyTorch random seed bit mask
-_SEED_MASK = 0x00ff_ffff_ffff_ffff
+# PyTorch random seed maximum value
+_SEED_MAX = 0x0100_0000_0000_0000
 
 SLICE_ALL = slice(None)
 
@@ -57,7 +59,8 @@ def derive_rand(rand: th.Generator, device: Device) -> th.Generator:
     
     # Create and seed new random number generator
     rand_new = th.Generator(device)
-    rand_new.manual_seed(rand.seed()&_SEED_MASK)
+    seed_new = th.randint(_SEED_MAX, (), device=rand.device, generator=rand)
+    rand_new.manual_seed(seed_new.item())
 
     return rand_new
 
@@ -66,6 +69,16 @@ def force_float(dtype: th.dtype, target_dtype: th.dtype) -> th.dtype:
 
 def isscalar(tensor: th.Tensor) -> bool:
     return tensor.ndim==0
+
+def multivariate_normal_diag(loc: th.Tensor, scale: th.Tensor) -> LowRankMultivariateNormal:
+    dist = LowRankMultivariateNormal(
+        loc=loc,
+        cov_factor=th.zeros_like(scale).unsqueeze(-1),
+        cov_diag=scale
+    )
+    dist.scale = dist.cov_diag
+    
+    return dist
 
 def one_hot(labels: th.Tensor, n: int) -> th.Tensor:
     return th.eye(n, device=labels.device)[labels]
@@ -81,10 +94,18 @@ def rand_bool(shape: Shape = (), p: SupportsFloat = 0.5, *, device: Device = "cp
 
 @contextmanager
 def use_rand(rand: th.Generator, **kwargs: Any):
-    # Fork and seed current global random state
+    # Fork random number generator state
     with th.random.fork_rng(devices=(rand.device,), **kwargs):
-        th.random.manual_seed(rand.seed()&_SEED_MASK)
+        # Seed global random number generator state
+        seed_fork = th.randint(_SEED_MAX, (), device=rand.device, generator=rand)
+        th.random.manual_seed(seed_fork.item())
+        
+        # Return to code in scope
         yield
+        
+        # "Join" changes of the global random number generator state
+        seed_join = th.randint(_SEED_MAX, ())
+        rand.manual_seed(seed_join.item())
 
 def zip_params(*modules: ModuleT) -> Iterable[Tuple[th.Tensor, ...]]:
     return zip(*(module.parameters() for module in modules))
