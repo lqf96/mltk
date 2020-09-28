@@ -16,11 +16,11 @@ def lambda_return(rewards, values_next, discount_factor, lambda_, *, n = None):
     return_ = 0.
     weight_base = lambda_
     # Compute return
-    for i, (reward, value_next) in enumerate(zip(rewards, values_next)):
+    for i, (rewards_step, values_next_step) in enumerate(zip(rewards, values_next)):
         # Accumulate return for next value
-        return_ += (weight_base*discount_factor)*value_next
+        return_ += (weight_base*discount_factor)*values_next_step
         # Accumulate return for step reward
-        return_ += (weight_base*(1-lambda_**(n-i))/(1-lambda_))*reward
+        return_ += (weight_base*(1-lambda_**(n-i))/(1-lambda_))*rewards_step
 
         # Update base weight
         weight_base *= discount_factor*lambda_

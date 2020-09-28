@@ -93,10 +93,10 @@ class ReplayBuffer():
             seq_end_index = seq_begin_index+seq_len
             
             # Ignore sequence if it spans across multiple episodes
-            episode_end_steps = next(episode_end_steps.irange(
+            episode_end_step = next(episode_end_steps.irange(
                 seq_begin_index+offset, seq_end_index+offset-1, inclusive=(True, False)
             ), None)
-            if episode_end_steps is not None:
+            if episode_end_step is not None:
                 continue
             # Store sequence range
             seq_ranges.append((seq_begin_index, seq_end_index))
