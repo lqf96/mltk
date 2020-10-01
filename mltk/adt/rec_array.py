@@ -71,7 +71,7 @@ class RecArray():
     def __setattr__(self, col_name: str, col_data):
         array_meta = self._array_meta
 
-        batch_shape = array_meta.shape
+        batch_shape = array_meta.shape[1:]
         col_batch_shape = col_data.shape[:len(batch_shape)]
         # Column has conflicting batch shape
         if col_batch_shape!=batch_shape:

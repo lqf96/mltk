@@ -6,6 +6,7 @@ from itertools import count
 
 import torch as th
 from torch.nn import Module
+from torch.nn.utils import clip_grad_norm_, clip_grad_value_
 from torch.optim import Optimizer as TorchOptim
 from torch.optim.lr_scheduler import _LRScheduler
 
@@ -74,18 +75,18 @@ class Optimizer():
         self._lr_sched: Optional[_LRScheduler] = None
 
     @overload
-    def attach_params(self, params: _Params) -> "Optimizer": ...
+    def attach_params(self, params: _Params, group_name: str = "_default") -> "Optimizer": ...
 
     @overload
     def attach_params(self, **params_kwargs: _Params) -> "Optimizer": ...
 
-    def attach_params(self, params: Optional[_Params] = None, **params_kwargs: _Params
-        ) -> "Optimizer":
+    def attach_params(self, params: Optional[_Params] = None, group_name: str = "_default",
+        **params_kwargs: _Params) -> "Optimizer":
         if params is not None:
-            # No other parameters can be provided beyond the default group
+            # No other parameters can be provided beyond the given group
             if params_kwargs:
                 raise ValueError("parameters cannot be provided for other groups")
-            params_kwargs = {"_default": params}
+            params_kwargs = {group_name: params}
         
         optim_groups = self.optim_groups
         attached_params = self._attached_params
@@ -106,8 +107,8 @@ class Optimizer():
         
         return self
     
-    def step(self, objective: th.Tensor, retain_graph: bool = False, create_graph: bool = False
-        ) -> "Optimizer":
+    def step(self, objective: th.Tensor, retain_graph: bool = False, create_graph: bool = False,
+        clip_norm=None) -> "Optimizer":
         optim = self._optim
         lr_sched = self._lr_sched
         # Do nothing if optimizer does not exist
@@ -116,6 +117,10 @@ class Optimizer():
 
         # Back-propagate gradients from the objective
         objective.backward(retain_graph=retain_graph, create_graph=create_graph)
+        # Clip gradients
+        if clip_norm is not None:
+            for group in optim.param_groups:
+                clip_grad_norm_(group["params"], clip_norm)
         
         # Step the optimizer
         optim.step()
@@ -131,7 +136,7 @@ class Optimizer():
     def zero_grad(self) -> "Optimizer":
         optim = self._optim
         # Zero gradient of the optimizer if it exists
-        if optim:
+        if optim is not None:
             optim.zero_grad()
         
         return self

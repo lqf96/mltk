@@ -74,7 +74,7 @@ def multivariate_normal_diag(loc: th.Tensor, scale: th.Tensor) -> LowRankMultiva
     dist = LowRankMultivariateNormal(
         loc=loc,
         cov_factor=th.zeros_like(scale).unsqueeze(-1),
-        cov_diag=scale
+        cov_diag=scale+0.01
     )
     dist.scale = dist.cov_diag
     
