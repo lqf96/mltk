@@ -14,7 +14,7 @@ def n_step_return(rewards: th.Tensor, values_last: th.Tensor, discount_factor: S
     n_steps = len(rewards) if n_steps is None else n_steps
     n_steps = th.as_tensor(n_steps)
     
-    n_steps_max = n_steps.max()
+    n_steps_max = int(n_steps.max())
     weight_step = 1.
     returns = 0.
     # Accumulate rewards for each step
@@ -36,7 +36,7 @@ def lambda_return(rewards: th.Tensor, values_next: th.Tensor, discount_factor: S
     n_steps = len(rewards) if n_steps is None else n_steps
     n_steps = th.as_tensor(n_steps)
     
-    n_steps_max = n_steps.max()
+    n_steps_max = int(n_steps.max())
     weight_values_base = (1-lambda_)*discount_factor
     weight_step = 1.
     returns = 0.

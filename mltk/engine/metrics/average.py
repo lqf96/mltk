@@ -1,8 +1,13 @@
-from typing import TYPE_CHECKING, Optional
+from typing import Iterable, Optional, Union
 from mltk.types import TensorT
 
 from ..engine import Engine
-from .metric import Metric, Triggers
+from .metric import Metric, Triggers, attach_dependencies
+
+__all__ = [
+    "Average",
+    "RunningAverage"
+]
 
 class Average(Metric[TensorT]):
     __slots__ = ("src", "_count", "_avg")
@@ -42,9 +47,9 @@ class Average(Metric[TensorT]):
 
         return self._avg
     
-    def attach(self, engine: Engine, name: str):
+    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
         # Attach source metric
-        self.src.attach_dependency(engine)
+        attach_dependencies(engine, (self.src,))
         # Attach self
         super().attach(engine, name)
 
@@ -83,8 +88,8 @@ class RunningAverage(Metric[TensorT]):
 
         return self._avg
 
-    def attach(self, engine: Engine, name: str):
+    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
         # Attach source metric
-        self.src.attach_dependency(engine)
+        attach_dependencies(engine, (self.src,))
         # Attach self
         super().attach(engine, name)

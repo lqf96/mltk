@@ -1,8 +1,9 @@
 from typing import TYPE_CHECKING, Any, AsyncIterator, Awaitable, Callable, Dict, Iterable, \
-    List, NamedTuple, Optional, Protocol, Set, Tuple, TypeVar, Union, overload
+    List, Optional, Protocol, Set, Tuple, TypeVar, Union, overload
 from mltk.types import Args, Kwargs, StrDict
 
 import inspect, asyncio as aio
+from dataclasses import dataclass
 
 from mltk.util import create_bg_task
 from .events import AbstractEvents, Events
@@ -32,7 +33,8 @@ _HandlerT = TypeVar("_HandlerT", bound=EventHandler)
 class _OnDecorator(Protocol[_HandlerT]):
     def __call__(self, f: _HandlerT) -> _HandlerT: ...
 
-class _HandlerInfo(NamedTuple):
+@dataclass(frozen=True)
+class _HandlerInfo:
     """\
     Extra information for registered event handlers.
 
@@ -68,7 +70,10 @@ class State():
             Events.ITER_COMPLETED: "iterations",
             Events.EPOCH_COMPLETED: "epochs"
         }
-        self.metrics: StrDict = {}
+    
+    def count_for(self, event: AbstractEvents) -> int:
+        event_attr = self.event_to_attr[event]
+        return getattr(self, event_attr)
 
 class Engine():
     def __init__(self, main_func: Callable[..., Awaitable[Any]]):
@@ -83,6 +88,8 @@ class Engine():
         self._handlers: Dict[AbstractEvents, Dict[EventHandler, _HandlerInfo]] = {}
         ## Pending tasks events are gated on
         self._gate_tasks: Dict[AbstractEvents, List["aio.Task[Any]"]] = {}
+
+        self._metric_groups: Dict[str, Set["Metric[Any]"]] = {}
 
     async def emit(self, event: AbstractEvents):
         state = self.state
@@ -240,10 +247,7 @@ class Engine():
 
 def every(interval: int) -> EventFilter:
     def every_filter(state: State, event: AbstractEvents) -> bool:
-        # Find counter for given event
-        event_attr = state.event_to_attr[event]
-        # Check interval for the counter
-        return getattr(state, event_attr)%interval==0
+        return state.count_for(event)%interval==0
     
     return every_filter
 

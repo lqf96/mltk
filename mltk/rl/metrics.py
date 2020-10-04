@@ -2,7 +2,7 @@ from mltk.types.gym import O, A, R
 
 from mltk.engine import Events
 from mltk.engine.metrics import GeneratorMetric
-from .execution import EPISODE_STARTED, EPISODE_COMPLETED, RLState
+from .execution import EPISODE_STARTED, RLState
 
 __all__ = [
     "episode_length",
@@ -11,8 +11,7 @@ __all__ = [
 
 @GeneratorMetric.wraps(triggers={
     "reset": EPISODE_STARTED,
-    "update": Events.ITER_COMPLETED,
-    "record": EPISODE_COMPLETED
+    "update": Events.ITER_COMPLETED
 })
 def episode_length():
     length = 0
@@ -29,8 +28,7 @@ def episode_length():
 
 @GeneratorMetric.wraps(triggers={
     "reset": EPISODE_STARTED,
-    "update": Events.ITER_COMPLETED,
-    "record": EPISODE_COMPLETED
+    "update": Events.ITER_COMPLETED
 })
 def episode_reward(discount_factor: float = 1):
     retn = 0.

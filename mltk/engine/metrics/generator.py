@@ -1,27 +1,27 @@
-from typing import Any, Callable, Generator, Optional
+from typing import Any, Callable, Generator, Iterable, Optional, Union
 from mltk.types import Args, Kwargs, T, U
 
 import functools
 
-from .metric import Metric, Triggers
+from ..engine import Engine
+from .metric import Metric, Triggers, attach_dependencies
 
-GenMetricFunc = Callable[..., Generator[T, U, None]]
+_MetricGen = Generator[T, Optional[U], None]
+GenMetricFunc = Callable[..., _MetricGen[T, U]]
 
 class GeneratorMetric(Metric[T]):
     __slots__ = ("f", "src", "args", "kwargs", "_gen", "_value")
 
     def __init__(self, f: GenMetricFunc[T, U], src: Metric[U], triggers: Triggers, *,
-        args: Args = (), kwargs: Kwargs = {}):
+        args: Args = (), kwargs: Kwargs = {}, ):
         super().__init__(triggers=triggers)
         
-        ## Pure generator function (no side effect beyond internal state change)
         self.f = f
-        ## Source (inner) metric
         self.src = src
-        ## Arguments of the function
         self.args = tuple(args)
-        ## Keyword arguments of the function
         self.kwargs = dict(kwargs)
+
+        self._gen: Optional[_MetricGen[T, U]] = None
 
         # Reset metric state
         self.reset()
@@ -39,7 +39,7 @@ class GeneratorMetric(Metric[T]):
         return gen_metric_decorator
 
     def reset(self):
-        gen_old: Optional[Generator[T, U, None]] = getattr(self, "_gen", None)
+        gen_old = self._gen
         # Notify generator to clean up during reset
         if gen_old is not None:
             try:
@@ -59,8 +59,8 @@ class GeneratorMetric(Metric[T]):
     def compute(self) -> T:
         return self._value
 
-    def attach(self, engine, name):
+    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
         # Attach source metric
-        self.src.attach_dependency(engine)
+        attach_dependencies(engine, (self.src,))
         # Attach self
         super().attach(engine, name)

@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Iterable, Mapping, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterable, Mapping, Tuple, TypeVar, Union
 
 __all__ = [
     "T",
@@ -6,8 +6,8 @@ __all__ = [
     "Args",
     "IntoMapping",
     "Kwargs",
+    "Pair",
     "StrDict",
-    "Factory"
 ]
 
 # Generic type parameter
@@ -18,7 +18,7 @@ Args = Iterable[Any]
 Kwargs = Mapping[str, Any]
 StrDict = Dict[str, Any]
 
-Factory = Callable[..., T]
+Pair = Tuple[T, T]
 
 IntoMapping = Union[
     Iterable[Tuple[T, U]],
