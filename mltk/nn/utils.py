@@ -11,6 +11,8 @@ class Concat(Module):
     __slots__ = ("dim",)
 
     def __init__(self, dim: int = -1):
+        super().__init__()
+        
         self.dim = dim
     
     def forward(self, inputs: Tuple[th.Tensor, ...]):

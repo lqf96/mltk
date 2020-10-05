@@ -21,7 +21,7 @@ class _AbstractRLAgent(ABC, Generic[O, A, R]):
         device: Device = "cpu", rand: th.Generator = th.default_generator):
         self.env = env
         self.dtype = th.get_default_dtype() if dtype is None else dtype
-        self.device = device = mu.as_device(device)
+        self.device = device = th.device(device)
         self.rand_cpu = mu.derive_rand(rand, "cpu")
         self.rand_dev = mu.derive_rand(rand, device)
     

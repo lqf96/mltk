@@ -50,7 +50,7 @@ class MultivariateNormalDiag(LowRankMultivariateNormal):
     def __init__(self, loc: th.Tensor, scale_diag: th.Tensor,
         validate_args: Optional[bool] = None):
         # "Dummy" covariance factor
-        cov_factor = th.zeros_like(scale_diag).unsqueeze(0)
+        cov_factor = th.zeros_like(scale_diag).unsqueeze(-1)
         cov_diag = scale_diag.square()
 
         super().__init__(loc, cov_factor, cov_diag, validate_args=validate_args)

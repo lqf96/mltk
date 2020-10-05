@@ -17,7 +17,7 @@ class Deque():
         device: Device = "cpu", max_len: Optional[int] = None):
         size = mu.as_size(shape)
         dtype = th.get_default_dtype() if dtype is None else dtype
-        device = mu.as_device(device)
+        device = th.device(device)
 
         self._buf = th.empty((self._MIN_CAPACITY, *size), dtype=dtype, device=device)
         self._begin = 0

@@ -171,7 +171,7 @@ class RecDeque(RecArray):
                 (col_name, cls._col_from_schema(col_schema, device, max_len)) \
                 for col_name, col_schema in schema
             ),
-            _array_meta=th.empty((0, 0), device=mu.as_device(device)),
+            _array_meta=th.empty((0, 0), device=th.device(device)),
             _skip_validation=True
         )
     

@@ -19,6 +19,8 @@ class Binomial(Module):
     __slots__ = ("total_count", "pass_logits")
 
     def __init__(self, total_count: int = 1, pass_logits: bool = True):
+        super().__init__()
+        
         self.total_count = total_count
         self.pass_logits = pass_logits
 
@@ -33,6 +35,8 @@ class Categorical(Module):
     __slots__ = ("pass_logits",)
 
     def __init__(self, pass_logits: bool = True):
+        super().__init__()
+        
         self.pass_logits = pass_logits
 
     def forward(self, inputs: th.Tensor) -> thd.Categorical:
@@ -44,6 +48,8 @@ class MultivariateNormalDiag(Module):
     __slots__ = ("epsilon",)
 
     def __init__(self, epsilon: SupportsFloat = 0.01):
+        super().__init__()
+        
         self.epsilon = float(epsilon)
     
     @overload
@@ -79,6 +85,8 @@ class Normal(Module):
     __slots__ = ("epsilon",)
 
     def __init__(self, epsilon: SupportsFloat = 0.01):
+        super().__init__()
+        
         self.epsilon = float(epsilon)
     
     @overload
