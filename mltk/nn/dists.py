@@ -9,20 +9,36 @@ import torch.nn.functional as f
 import mltk.util as mu
 
 __all__ = [
+    "Binomial",
     "Categorical",
     "MultivariateNormalDiag",
     "Normal"
 ]
 
+class Binomial(Module):
+    __slots__ = ("total_count", "pass_logits")
+
+    def __init__(self, total_count: int = 1, pass_logits: bool = True):
+        self.total_count = total_count
+        self.pass_logits = pass_logits
+
+    def forward(self, inputs: th.Tensor) -> thd.Binomial:
+        total_count = self.total_count
+
+        return thd.Binomial(total_count, logits=inputs) \
+            if self.pass_logits \
+            else thd.Binomial(total_count, probs=inputs)
+
 class Categorical(Module):
-    __slots__ = ("_pass_logits",)
+    __slots__ = ("pass_logits",)
 
     def __init__(self, pass_logits: bool = True):
-        self._pass_logits = pass_logits
+        self.pass_logits = pass_logits
 
     def forward(self, inputs: th.Tensor) -> thd.Categorical:
-        return thd.Categorical(logits=inputs) if self._pass_logits else \
-            thd.Categorical(probs=inputs)
+        return thd.Categorical(logits=inputs) \
+            if self.pass_logits \
+            else thd.Categorical(probs=inputs)
 
 class MultivariateNormalDiag(Module):
     __slots__ = ("epsilon",)
@@ -31,13 +47,13 @@ class MultivariateNormalDiag(Module):
         self.epsilon = float(epsilon)
     
     @overload
-    def forward(self, inputs: th.Tensor) -> thd.LowRankMultivariateNormal: ...
+    def forward(self, inputs: th.Tensor) -> mu.MultivariateNormalDiag: ...
 
     @overload
-    def forward(self, inputs: Pair[th.Tensor]) -> thd.LowRankMultivariateNormal: ...
+    def forward(self, inputs: Pair[th.Tensor]) -> mu.MultivariateNormalDiag: ...
 
     def forward(self, inputs: Union[th.Tensor, Pair[th.Tensor]]
-        ) -> thd.LowRankMultivariateNormal:
+        ) -> mu.MultivariateNormalDiag:
         # Separated mean and raw standard deviation
         if isinstance(inputs, tuple):
             mean, std_raw = inputs

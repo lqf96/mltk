@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Union, overload
+from typing import Callable, Dict, Iterable, List, Mapping, Optional, Union, overload
 from typing_extensions import Protocol
 from mltk.types import Kwargs
 
