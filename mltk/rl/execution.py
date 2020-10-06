@@ -1,4 +1,5 @@
 from typing import Generic, cast
+from mltk.types import StrDict
 from mltk.types.gym import O, A, R, _AbstractEnv
 
 from mltk.engine import Engine, Events, State
@@ -23,6 +24,7 @@ class RLState(State, Generic[O, A, R]):
     env: _AbstractEnv[O, A, R]
     training: bool
     transition: Transition
+    extra: StrDict
 
 async def _run_rl_engine(engine: Engine):
     """ Execute or train agent(s) in an environment. """
@@ -63,7 +65,9 @@ async def _run_rl_engine(engine: Engine):
             agent.update_experiences(step=step, transition=transition)
             # Update agent during training
             if training:
-                agent.update_policy(step=step)
+                extra = agent.update_policy(step=step)
+                if extra:
+                    engine_state.extra = extra
             
             # Update observation
             if done:

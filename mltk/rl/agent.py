@@ -1,5 +1,5 @@
 from typing import Any, Generic, Optional
-from mltk.types import Device
+from mltk.types import Device, StrDict
 from mltk.types.gym import O, A, R, Discrete, Space, _AbstractEnv
 
 from abc import ABC, abstractmethod
@@ -44,7 +44,7 @@ class _AbstractRLAgent(ABC, Generic[O, A, R]):
     def update_experiences(self, step: Step, transition: Transition) -> None:
         pass
 
-    def update_policy(self, step: Step) -> None:
+    def update_policy(self, step: Step) -> Optional[StrDict]:
         raise NotImplementedError
 
 class RLAgent(_AbstractRLAgent[O, A, float]):
