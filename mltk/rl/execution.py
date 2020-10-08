@@ -93,6 +93,10 @@ def make_rl_engine(env, agent: _AbstractRLAgent[O, A, R], training: bool = False
         engine_state.env = env
         engine_state.agent = agent
         engine_state.training = training
+        
+        # TODO: Temporary
+        from collections import defaultdict
+        engine_state.extra = defaultdict(lambda: 0.)
 
     # Return engine
     return engine
