@@ -12,7 +12,8 @@ __all__ = [
     "Binomial",
     "Categorical",
     "MultivariateNormalDiag",
-    "Normal"
+    "Normal",
+    "OneHotCategorical"
 ]
 
 class Binomial(Module):
@@ -114,3 +115,16 @@ class Normal(Module):
             std_raw = inputs[..., 1]
 
         return thd.Normal(loc=mean, scale=f.softplus(std_raw)+self.epsilon)
+
+class OneHotCategorical(Module):
+    __slots__ = ("pass_logits",)
+
+    def __init__(self, pass_logits: bool = True):
+        super().__init__()
+        
+        self.pass_logits = pass_logits
+
+    def forward(self, inputs: th.Tensor) -> mu.OneHotCategorical:
+        return mu.OneHotCategorical(logits=inputs) \
+            if self.pass_logits \
+            else mu.OneHotCategorical(probs=inputs)

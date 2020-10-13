@@ -1,13 +1,18 @@
-from typing import Tuple
+from __future__ import annotations
+
+from typing import Iterator, Sequence, Tuple
+
+import copy
 
 import torch as th
-from torch.nn import Module
+from torch import nn
 
 __all__ = [
-    "Concat"
+    "Concat",
+    "mlp"
 ]
 
-class Concat(Module):
+class Concat(nn.Module):
     __slots__ = ("dim",)
 
     def __init__(self, dim: int = -1):
@@ -15,5 +20,8 @@ class Concat(Module):
         
         self.dim = dim
     
-    def forward(self, inputs: Tuple[th.Tensor, ...]):
+    def forward(self, inputs: Tuple[th.Tensor, ...]) -> th.Tensor:
         return th.cat(inputs, self.dim)
+
+def mlp():
+    pass

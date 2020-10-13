@@ -11,7 +11,6 @@ from torch.distributions import LowRankMultivariateNormal
 
 __all__ = [
     "SLICE_ALL",
-    "MultivariateNormalDiag",
     "as_th_dtype",
     "as_size",
     "derive_rand",
@@ -41,23 +40,6 @@ _DTYPE_MAP = {
 _SEED_MAX = 0x0100_0000_0000_0000
 
 SLICE_ALL = slice(None)
-
-class MultivariateNormalDiag(LowRankMultivariateNormal):
-    """
-    Create a multivariate normal distribution with diagonal covariance matrix.
-    (i.e. zero correlation between any dimensions)
-    """
-    def __init__(self, loc: th.Tensor, scale_diag: th.Tensor,
-        validate_args: Optional[bool] = None):
-        # "Dummy" covariance factor
-        cov_factor = th.zeros_like(scale_diag).unsqueeze(-1)
-        cov_diag = scale_diag.square()
-
-        super().__init__(loc, cov_factor, cov_diag, validate_args=validate_args)
-    
-    @property
-    def scale_diag(self) -> th.Tensor:
-        return self.cov_diag.sqrt()
 
 def as_th_dtype(dtype: Union[str, type, np.dtype]) -> th.dtype:
     return _DTYPE_MAP[np.dtype(dtype).name]
