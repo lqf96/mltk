@@ -12,6 +12,7 @@ __all__ = [
     
 class DuelingQNet(nn.Module):
     def __init__(self, base_net: nn.Module, feat_dims: int, n_actions: int):
+        super().__init__()
         self.base_net = base_net
 
         self._value_head = nn.Sequential(
