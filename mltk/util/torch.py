@@ -6,8 +6,7 @@ from contextlib import contextmanager
 
 import numpy as np
 import torch as th
-from torch.nn import Module
-from torch.distributions import LowRankMultivariateNormal
+from torch.cuda import is_available as is_cuda_available
 
 __all__ = [
     "SLICE_ALL",
@@ -94,7 +93,12 @@ def rand_bool(shape: Shape = (), p: SupportsFloat = 0.5, *, device: Device = "cp
 
 @contextmanager
 def use_rand(rand: th.Generator, **kwargs: Any):
-    with th.random.fork_rng(devices=(rand.device,), **kwargs):
+    if is_cuda_available() and rand.device.type=="cuda":
+        devices = (rand.device,)
+    else:
+        devices = ()
+    
+    with th.random.fork_rng(devices=devices, **kwargs):
         # "Fork" with derived random state
         seed_fork = th.randint(_SEED_MAX, (), device=rand.device, generator=rand)
         th.random.manual_seed(int(seed_fork))

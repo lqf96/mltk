@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Iterator, Sequence, Tuple
-
 import copy
 
 import torch as th
@@ -9,7 +7,7 @@ from torch import nn
 
 __all__ = [
     "Concat",
-    "mlp"
+    "RepeatLayers"
 ]
 
 class Concat(nn.Module):
@@ -20,8 +18,14 @@ class Concat(nn.Module):
         
         self.dim = dim
     
-    def forward(self, inputs: Tuple[th.Tensor, ...]) -> th.Tensor:
+    def forward(self, inputs: tuple[th.Tensor, ...]) -> th.Tensor:
         return th.cat(inputs, self.dim)
 
-def mlp():
-    pass
+class RepeatLayers(nn.Sequential):
+    def __init__(self, layers, *args, times: int):
+        all_layers = []
+        
+        for _ in range(times):
+            all_layers.extend(layers())
+
+        super().__init__(*all_layers)

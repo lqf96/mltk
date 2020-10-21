@@ -107,8 +107,8 @@ class Optimizer():
         
         return self
     
-    def step(self, objective: th.Tensor, retain_graph: bool = False, create_graph: bool = False,
-        clip_norm=None) -> "Optimizer":
+    def step(self, objective: Optional[th.Tensor] = None, retain_graph: bool = False,
+        create_graph: bool = False, clip_norm=None) -> "Optimizer":
         optim = self._optim
         lr_sched = self._lr_sched
         # Do nothing if optimizer does not exist
@@ -116,7 +116,8 @@ class Optimizer():
             pass
 
         # Back-propagate gradients from the objective
-        objective.backward(retain_graph=retain_graph, create_graph=create_graph)
+        if objective is not None:
+            objective.backward(retain_graph=retain_graph, create_graph=create_graph)
         # Clip gradients
         if clip_norm is not None:
             for group in optim.param_groups:
