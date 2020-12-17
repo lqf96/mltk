@@ -1,7 +1,6 @@
-from typing import Any, Iterator, Mapping, Optional, Tuple, Union
+from __future__ import annotations
 
-from numpy.core.records import array
-from numpy.lib.shape_base import column_stack
+from typing import Any, Iterator, Mapping, Optional, Tuple, Union
 from mltk.types import Device, IntoMapping, Shape
 
 from types import MappingProxyType
@@ -10,6 +9,7 @@ import torch as th
 
 import mltk.util as mu
 from .deque import Deque
+from ._util import SymbolicTensor
 
 __all__ = [
     "RecArray",
@@ -18,36 +18,32 @@ __all__ = [
 ]
 
 class RecArray():
-    _array_meta: th.Tensor
+    _array_meta: SymbolicTensor
 
     __slots__ = ("_array_meta", "__dict__")
 
     def __init__(self, data: IntoMapping[str, Any] = {}, shape: Optional[Shape] = None,
-        batch_dims: int = 0, device: Device = "cpu", _array_meta: Optional[th.Tensor] = None,
+        batch_dims: int = 0, device: Device = "cpu", _array_meta: Optional[SymbolicTensor] = None,
         _skip_validation: bool = False):
         # Add columns to the record array
         self.__dict__.update(data)
 
         if _array_meta is None:
-            # Create meta tensor from inferred batch shape
-            batch_shape = self._infer_batch_shape(batch_dims) \
-                if shape is None \
-                else mu.as_size(shape)
-            _array_meta = th.empty((0, *batch_shape), device=mu.as_device(device))
+            _array_meta = self._infer_array_meta(batch_dims, shape)
         # Bypass column checks when storing meta tensor
         self._set_array_meta(_array_meta)
 
         if not _skip_validation:
             # Validate and convert column data against meta tensor
-            for col_name, col_data in self.columns.items():
-                setattr(self, col_name, col_data)
+            for col_name, col_data in self.columns().items():
+                self._validate_col(col_name, col_data)
 
-    def _set_array_meta(self, array_meta: th.Tensor):
+    def _set_array_meta(self, array_meta: SymbolicTensor):
         self.__class__._array_meta.__set__(self, array_meta)
 
-    def _infer_batch_shape(self, batch_dims: int) -> th.Size:
+    def _infer_array_meta(self, batch_dims: int, shape: Optional[Shape]) -> SymbolicTensor:
         try:
-            col_name, col_data = next(iter(self.columns.items()))
+            col_name, col_data = next(iter(self.columns().items()))
             # Column does not have enough dimensions
             if col_data.ndim<batch_dims:
                 raise ValueError(
@@ -55,24 +51,18 @@ class RecArray():
                     f"(expect at least {batch_dims}, got {col_data.ndim})"
                 )
             
-            return col_data.shape[:batch_dims]
+            device = col_data.device
+            shape = shape or col_data.shape[:batch_dims]
         except StopIteration:
-            return th.Size()
-
-    # Record array is not hashable
-    __hash__ = None
-
-    def __len__(self) -> int:
-        if self.ndim==0:
-            raise TypeError("length unavailable for 0-d record array")
-        else:
-            return self._array_meta.shape[1]
-
-    def __setattr__(self, col_name: str, col_data):
-        array_meta = self._array_meta
-
-        batch_shape = array_meta.shape[1:]
+            device = "cpu"
+            shape = ()
+        
+        return SymbolicTensor(shape, device=device)
+    
+    def _validate_col(self, col_name, col_data):
+        batch_shape = self._array_meta.shape
         col_batch_shape = col_data.shape[:len(batch_shape)]
+
         # Column has conflicting batch shape
         if col_batch_shape!=batch_shape:
             raise ValueError(
@@ -80,25 +70,54 @@ class RecArray():
                 f"(expect {batch_shape}, got {col_batch_shape})"
             )
 
-        # Convert column to current device and then store it
-        self.__dict__[col_name] = col_data.to(device=array_meta.device)
+    # Record array is not hashable
+    __hash__ = None
 
-    def __getitem__(self, indices: Any) -> "RecArray":
-        # Insert a slice-all index for the first dummy dimension
-        meta_indices = (mu.SLICE_ALL, *indices) \
-            if isinstance(indices, tuple) \
-            else (mu.SLICE_ALL, indices)
-        
+    def __len__(self) -> int:
+        return len(self._array_meta)
+
+    def __setattr__(self, col_name: str, col_data):
+        self._validate_col(col_name, col_data)
+        # Convert column to current device and then store it
+        self.__dict__[col_name] = col_data.to(device=self.device)
+
+    def __getitem__(self, indices: Any) -> RecArray:
         # Check indices validity by doing a fictional slice on the meta tensor,
         # then perform slicing on all columns
-        return self.map_data(
-            lambda col_data: col_data[indices],
-            lambda array_meta: array_meta[meta_indices],
-            _skip_validation=True
-        )
+        return self.map_data(lambda col_data: col_data[indices], _skip_validation=True)
 
-    def __iter__(self) -> Iterator["RecArray"]:
+    def __iter__(self) -> Iterator[RecArray]:
         return (self[i] for i in range(len(self)))
+    
+    def __repr__(self) -> str:
+        cls = self.__class__
+        shape = self.shape
+        device = self.device
+
+        repr_str = cls.__name__+"({\n"
+        # Show each column
+        repr_str += ",\n".join(
+            f"    '{col_name}': {repr(col_data)}" \
+            for col_name, col_data in self.columns().items()
+        )
+        repr_str += "\n}"
+
+        # Show shape if number of batch dimensions is not zero
+        if shape!=():
+            repr_str += f", shape={tuple(shape)}"
+        # Show device for non-CPU record array
+        if device.type!="cpu":
+            repr_str += f", device='{device.type}:{device.index}'"
+        repr_str += ")"
+
+        return repr_str
+
+    def __torch_function__(self, func, types, args=(), kwargs={}):
+        # TODO: Only unary cases are handled now
+        return self.map_data(
+            lambda col_data: col_data.__torch_function__(func, (type(col_data),), (col_data,), kwargs),
+            _map_meta=False, _skip_validation=True
+        )
 
     @property
     def device(self) -> th.device:
@@ -106,33 +125,30 @@ class RecArray():
 
     @property
     def ndim(self) -> int:
-        return self._array_meta.dim()-1
+        return self._array_meta.ndim
 
     @property
     def shape(self) -> th.Size:
-        return self._array_meta.shape[1:]
+        return self._array_meta.shape
 
-    @property
     def columns(self) -> Mapping[str, Any]:
         return MappingProxyType(self.__dict__)
 
-    def map_data(self, func, func_meta=None, _skip_validation: bool = False):
+    def map_data(self, func, *, _map_meta: bool = True, _skip_validation: bool = False
+        ) -> RecArray:
         array_meta = self._array_meta
         
         # Compute the meta tensor for new record array
-        func_meta = func_meta or func
-        new_array_meta = func_meta(array_meta)
-
+        array_meta_new = func(array_meta) if _map_meta else array_meta
         # Create new record array with transformed column data
         return RecArray(
-            ((col_name, func(col_data)) for col_name, col_data in self.columns.items()),
-            _array_meta=new_array_meta,
-            _skip_validation=_skip_validation
+            ((col_name, func(col_data)) for col_name, col_data in self.columns().items()),
+            _array_meta=array_meta_new, _skip_validation=_skip_validation
         )
 
-    def to(self, device) -> "RecArray":
+    def to(self, *args, **kwargs) -> RecArray:
         return self.map_data(
-            lambda col_data: col_data.to(device=device),
+            lambda col_data: col_data.to(*args, **kwargs),
             _skip_validation=True
         )
 
@@ -171,18 +187,18 @@ class RecDeque(RecArray):
                 (col_name, cls._col_from_schema(col_schema, device, max_len)) \
                 for col_name, col_schema in schema
             ),
-            _array_meta=th.empty((0, 0), device=th.device(device)),
+            _array_meta=SymbolicTensor(0, device=device),
             _skip_validation=True
         )
     
     @property
-    def _array_meta(self) -> th.Tensor:
+    def _array_meta(self) -> SymbolicTensor:
         # Get cached array meta tensor first
         array_meta = super()._array_meta
         if array_meta is self._EMPTY_CACHE:
             # Fallback to synthesized meta tensor if cache is unavailable
-            column = next(iter(self.columns.values()))
-            array_meta = th.empty((0, len(column)), device=column.device)
+            column = next(iter(self.columns().values()))
+            array_meta = SymbolicTensor(len(column), device=column.device)
             # Update cache
             self._set_array_meta(array_meta)
         
@@ -197,7 +213,7 @@ class RecDeque(RecArray):
             data = dict(data)
             data.update(kwargs)
 
-        columns = self.columns
+        columns = self.columns()
         # Column names mismatch
         if data.keys()!=columns.keys():
             raise ValueError("")

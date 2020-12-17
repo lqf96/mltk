@@ -1,34 +1,38 @@
+from __future__ import annotations
+
 from typing import Any, Generic, Optional
-from mltk.types import Device, StrDict
+from collections.abc import Mapping
+from mltk.types import Device
 from mltk.types.gym import O, A, R, Discrete, Space, _AbstractEnv
 
-from abc import ABC, abstractmethod
-
 import torch as th
+from torch.distributions import Distribution
+from torch import nn
 
 import mltk.util as mu
-from .policy import Policy
-from .types import Step, Transition
+from .types import RLState
 
 __all__ = [
+    "RLAgentBase",
     "RLAgent"
 ]
 
-class _AbstractRLAgent(ABC, Generic[O, A, R]):
-    __slots__ = ("env", "dtype", "device", "rand_cpu", "rand_dev")
+class RLAgentBase(nn.Module, Generic[O, A, R]):
+    def __init__(self, env: _AbstractEnv[O, A, R], rand: th.Generator = th.default_generator):
+        super().__init__()
 
-    def __init__(self, env: _AbstractEnv[O, A, R], dtype: Optional[th.dtype] = None,
-        device: Device = "cpu", rand: th.Generator = th.default_generator):
         self.env = env
-        self.dtype = th.get_default_dtype() if dtype is None else dtype
-        self.device = device = th.device(device)
         self.rand_cpu = mu.derive_rand(rand, "cpu")
-        self.rand_dev = mu.derive_rand(rand, device)
-    
-    @abstractmethod
-    def policy(self, observations: O, *, training_step: Optional[Step] = None,
-        **kwargs: Any) -> Policy[A]:
-        raise NotImplementedError
+
+    @property
+    def device(self) -> th.device:
+        param = next(iter(self.parameters()))
+        return param.device
+
+    @property
+    def dtype(self) -> th.dtype:
+        param = next(iter(self.parameters()))
+        return param.dtype
 
     @property
     def observation_space(self) -> "Space[O]":
@@ -38,16 +42,22 @@ class _AbstractRLAgent(ABC, Generic[O, A, R]):
     def action_space(self) -> "Space[A]":
         return self.env.action_space
 
-    def act(self, observation: O, **kwargs: Any) -> A:
-        return self.policy(observation, **kwargs).sample()
-
-    def update_experiences(self, step: Step, transition: Transition) -> None:
+    def observe(self, state: RLState[O, A, R], observation: O, done: bool) -> None:
         pass
 
-    def update_policy(self, step: Step) -> Optional[StrDict]:
+    def act(self, state: RLState[O, A, R]) -> A:
+        action = self(state)
+        if isinstance(action, Distribution):
+            action = action.sample()
+        if isinstance(action, th.Tensor):
+            action = action.detach().cpu()
+            action = action.item() if mu.isscalar(action) else action.numpy()
+        return action
+
+    def train(self, state: RLState[O, A, R]) -> Optional[dict[str, Any]]:
         raise NotImplementedError
 
-class RLAgent(_AbstractRLAgent[O, A, float]):
+class RLAgent(RLAgentBase[O, A, float]):
     __slots__ = ()
 
     @property
@@ -57,7 +67,8 @@ class RLAgent(_AbstractRLAgent[O, A, float]):
 
         # Observation space must be discrete
         if not isinstance(obs_space, Discrete):
-            raise TypeError("`n_states` can only be used on discrete state spaces")
+            #raise TypeError("`n_states` can only be used on discrete state spaces")
+            return NotImplemented
 
         return obs_space.n
 
@@ -68,6 +79,7 @@ class RLAgent(_AbstractRLAgent[O, A, float]):
 
         # Action space must be discrete
         if not isinstance(action_space, Discrete):
-            raise TypeError("`n_actions` can only be used on discrete action spaces")
+            #raise TypeError("`n_actions` can only be used on discrete action spaces")
+            return NotImplemented
 
         return action_space.n

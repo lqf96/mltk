@@ -1,21 +1,24 @@
-from typing import Any, Callable, Dict, Generic, Iterable, Optional, Union
-from mltk.types import T, TensorT, TensorLike, Args, Kwargs, Numerical
+from __future__ import annotations
+
+from typing import Any, Dict, Generic, Optional, Union
+from collections.abc import Callable, Iterable
+from mltk.types import T, TensorT, Args, Kwargs, Numerical
 
 from abc import ABC, abstractmethod
 from itertools import chain
 
-from ..engine import Engine, State
-from ..events import AbstractEvents, Events
+from ..engine import Engine
+from ..types import AbstractEventKind, Events, _StateT
 
 __all__ = [
     "Triggers",
     "Metric",
-    "Root",
+    "StateMetric",
     "LambdaMetric",
     "attach_dependencies"
 ]
 
-Triggers = Dict[str, AbstractEvents]
+Triggers = Dict[str, AbstractEventKind]
 
 class Metric(ABC, Generic[T]):
     __slots__ = ("triggers", "_engine", "_name")
@@ -23,18 +26,19 @@ class Metric(ABC, Generic[T]):
     def __init__(self, triggers: Triggers = {}):
         super().__init__()
 
-        ## Trigger points of the metric
+        # Trigger points of the metric
         self.triggers = triggers
-        ## Engine that the metric is attached to
+        # Engine the metric is attached to
         self._engine: Optional[Engine] = None
+        # Name of the attached metric
         self._name: Optional[str] = None
 
     def _on_start(self, engine: Engine, groups: Iterable[str]):
         metric_groups = engine._metric_groups
         
-        # Store metric to given metric groups
+        # Store metric instance to given metric groups
         for group_name in groups:
-            metric_group = engine._metric_groups.setdefault(group_name, set())
+            metric_group = metric_groups.setdefault(group_name, set())
             metric_group.add(self)
 
     def _on_reset(self, _: Engine):
@@ -58,7 +62,7 @@ class Metric(ABC, Generic[T]):
     def compute(self) -> T:
         return NotImplementedError
 
-    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
+    def attach(self, engine: Engine, name: str, groups: Union[None, str, Iterable[str]] = None):
         if self.attached:
             # Attempt to attach metric to a second engine
             if engine!=self._engine:
@@ -70,15 +74,17 @@ class Metric(ABC, Generic[T]):
         self._name = name
 
         triggers = self.triggers
-        # Attach reset event handler
+        # Attach (optional) reset event handler
         reset_event = triggers.get("reset")
         if reset_event is not None:
             engine.on(reset_event, self._on_reset)
-        # Attach update event handler
+        # Attach (optional) update event handler
         update_event = triggers.get("update")
         if update_event is not None:
             engine.on(update_event, self._on_update)
         # Attach engine start event handler for named metrics
+        if groups is None:
+            groups = "default"
         groups = (groups,) if isinstance(groups, str) else groups
         if name:
             engine.on(Events.STARTED, self._on_start, args=(groups,))
@@ -156,18 +162,18 @@ class LambdaMetric(Metric[T]):
         # Compute metric
         return self.f(*unlift_args, **unlift_kwargs)
 
-    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
+    def attach(self, engine: Engine, name: str, groups: Union[None, str, Iterable[str]] = None):
         attach_dependencies(engine, (
             arg for arg in chain(self.args, self.kwargs) \
             if isinstance(arg, Metric)
         ))
         
-        super().attach(engine, name)
+        super().attach(engine, name, groups)
 
-class Root(Metric[State]):
+class StateMetric(Metric[_StateT]):
     __slots__ = ()
     
-    def compute(self) -> State:
+    def compute(self) -> _StateT:
         state = self._engine.state
 
         # Engine state is non-null when the engine is running

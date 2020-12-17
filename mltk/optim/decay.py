@@ -1,5 +1,5 @@
 from typing import Callable, Optional
-from mltk.types import TensorT
+from mltk.types import NumericalT
 
 import math
 
@@ -31,7 +31,7 @@ def dcm_decay(tau: float, epoch: int, step_size: int = 1) -> DecayFunc:
     
     return dcm_decay_func
 
-def apply_decay(value: TensorT, decay_func: Optional[DecayFunc], count: int) -> TensorT:
+def apply_decay(value: NumericalT, decay_func: Optional[DecayFunc], count: int) -> NumericalT:
     # Compute decay factor
     decay_factor = decay_func(count) if decay_func else 1.
     # Return decayed value

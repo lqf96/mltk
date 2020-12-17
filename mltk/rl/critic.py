@@ -1,4 +1,7 @@
-from typing import Iterable, Optional, SupportsFloat, SupportsInt, Union
+from __future__ import annotations
+
+from typing import Optional, SupportsFloat, SupportsInt, Union
+from collections.abc import Iterable
 
 import torch as th
 
@@ -42,20 +45,9 @@ def lambda_return(rewards: Iterable[th.Tensor], values_next: th.Tensor,
         rewards_acc = rewards_acc+discounts_acc*rewards[i]
         discounts_acc = discounts_acc*discounts_next[i]
         returns_step = rewards_acc+discounts_acc*values_next[i]
-        print(
-            f"Rewards {i}:",
-            rewards[i].detach().mean().item(),
-            f"Discounts {i}:",
-            discounts_next[i].detach().mean().item(),
-            f"Discounts acc {i}:",
-            discounts_acc.detach().mean().item(),
-            f"Returns step {i}:",
-            returns_step.detach().mean().item()
-        )
         
         weight_step = lambda_acc if i==n_steps-1 else (1-lambda_)*lambda_acc
         returns = returns+weight_step*returns_step
         lambda_acc *= lambda_
 
-    print("Returns:", returns.mean(), "\n")
     return returns

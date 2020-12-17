@@ -39,6 +39,7 @@ def episode_reward(discount_factor: float = 1):
         if state is None:
             return
         
-        retn = discount_factor*retn+state.transition.reward
+        reward = state.transition.reward if state.transition else 0.
+        retn = discount_factor*retn+reward
         # Yield updated (discounted) return
         state = yield retn

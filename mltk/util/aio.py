@@ -1,8 +1,11 @@
-from typing import Optional, Awaitable, Any, Set
+from __future__ import annotations
+
+from typing import Callable, Optional, Any
+from collections.abc import Awaitable
 from mltk.types import T
 
+import inspect
 import asyncio as aio
-from functools import partial
 from asyncio import AbstractEventLoop, Future, Task
 
 __all__ = [
@@ -12,17 +15,11 @@ __all__ = [
     "rejected"
 ]
 
-def _remove_bg_task(task_set: Set["Task[T]"], task: "Task[T]"):
-    error = task.exception()
-    # Task is rejected with error
-    if error is not None:
-        raise error
-    
-    # Remove task from task set
-    task_set.remove(task)
+_ErrorHandler = Callable[[BaseException], None]
 
-def create_bg_task(task_set: Set["Task[T]"], awaitable: Awaitable[T], *,
-    loop: Optional[AbstractEventLoop] = None) -> "Task[T]":
+def create_bg_task(task_set: set[Task[Any]], awaitable: Awaitable[Any], *,
+    error_handler: Optional[_ErrorHandler] = None, loop: Optional[AbstractEventLoop] = None
+    ) -> Task[Any]:
     """\
     Creates and returns a background task from an awaitable object.
 
@@ -37,19 +34,32 @@ def create_bg_task(task_set: Set["Task[T]"], awaitable: Awaitable[T], *,
     Returns:
         The background task object.
     """
-    if loop is None:
-        loop = aio.get_event_loop()
+    loop = loop or aio.get_event_loop()
+
+    def _on_completed(task: Task[Any]):
+        error = task.exception()
+        # Task is rejected with error
+        if error:
+            # Handle task error with given handler
+            if error_handler:
+                error_handler(error)
+            # Rethrow error if no handler is given
+            else:
+                raise error
+
+        # Remove task from set
+        task_set.remove(task)
 
     # Create task from the awaitable
-    task = loop.create_task(awaitable)
+    task = loop.create_task(awaitable) if inspect.iscoroutine(awaitable) else awaitable
     # Store the task in the task set (to avoid being garbage collected)
     task_set.add(task)
-    # Remove the task from the task set when it is done
-    task.add_done_callback(partial(_remove_bg_task, task_set=task_set))
+    # Perform clean-up on completion of the task
+    task.add_done_callback(_on_completed)
 
     return task
 
-def set_immediate(loop: Optional[AbstractEventLoop] = None) -> "Future[None]":
+def set_immediate(loop: Optional[AbstractEventLoop] = None) -> Future[None]:
     """\
     Create a future that will be resolved on the next tick of the event loop.
 
@@ -59,10 +69,9 @@ def set_immediate(loop: Optional[AbstractEventLoop] = None) -> "Future[None]":
     Returns:
         A future that will be resolved on the next tick of the event loop.
     """
-    if loop is None:
-        loop = aio.get_event_loop()
+    loop = loop or aio.get_event_loop()
     
-    future = loop.create_future()
+    future: aio.Future[None] = loop.create_future()
     # Use "call_soon" to provide the "next tick" semantics
     loop.call_soon(future.set_result, None)
 
@@ -77,7 +86,7 @@ async def resolved(value: T) -> T:
     """
     return value
 
-async def rejected(error: Exception) -> Any:
+async def rejected(error: BaseException) -> Any:
     """\
     Create a coroutine that is rejected with given error.
 

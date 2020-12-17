@@ -1,12 +1,17 @@
-from typing import Any, Iterable, Optional, SupportsFloat, SupportsIndex, Tuple, Union, \
-    overload
+from __future__ import annotations
+
+from typing import Any, Optional, SupportsFloat, SupportsIndex, Union, overload
+from collections.abc import Callable, Iterable
 from mltk.types import Shape, Device, ModuleT
 
+import functools
+from types import MethodType
 from contextlib import contextmanager
 
 import numpy as np
 import torch as th
 from torch.cuda import is_available as is_cuda_available
+from torch.jit import trace_module
 
 __all__ = [
     "SLICE_ALL",
@@ -18,7 +23,8 @@ __all__ = [
     "one_hot",
     "rand_bool",
     "use_rand",
-    "zip_params"
+    "zip_params",
+    "traced_method"
 ]
 
 # A mapping from NumPy data type names to PyTorch data type
@@ -109,5 +115,23 @@ def use_rand(rand: th.Generator, **kwargs: Any):
         seed_join = th.randint(_SEED_MAX, ())
         rand.manual_seed(int(seed_join))
 
-def zip_params(*modules: ModuleT) -> Iterable[Tuple[th.Tensor, ...]]:
+def zip_params(*modules: ModuleT) -> Iterable[tuple[th.Tensor, ...]]:
     return zip(*(module.parameters() for module in modules))
+
+def traced_method(method: Callable):
+    @functools.wraps(method)
+    def trace_method(self, *args):
+        method_name = method.__name__
+
+        # Store original method on instance
+        setattr(self, method_name, MethodType(method, self))
+        # Trace method with give inputs
+        traced_module = trace_module(self, {method_name: args}, strict=False)
+        # Get traced function from traced module
+        traced_func = getattr(traced_module, method_name)
+        # Store traced function on module
+        setattr(self, method_name, traced_func)
+        
+        # Call traced function again to obtain results
+        return traced_func(*args)
+    return trace_method

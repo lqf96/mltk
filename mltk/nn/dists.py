@@ -5,6 +5,7 @@ import torch as th
 import torch.distributions as thd
 from torch.nn import Module
 import torch.nn.functional as f
+from torch.jit import is_tracing, is_scripting
 
 import mltk.util as mu
 
@@ -67,13 +68,15 @@ class MultivariateNormalDiag(Module):
         # Combined mean and raw standard deviation in one tensor
         else:
             combined_dims = inputs.shape[-1]
-            mean_std_dims, remainder = divmod(combined_dims, 2)
+            mean_std_dims = combined_dims//2
             # Check shape of the combined inputs
-            if remainder!=0:
-                raise ValueError(
-                    "expect the shape of the last dimension of combined inputs to be even, "
-                    f"got {combined_dims}"
-                )
+            if not is_scripting() and not is_tracing():
+                remainder = combined_dims%2
+                if remainder!=0:
+                    raise ValueError(
+                        "expect the shape of the last dimension of combined inputs to be even, "
+                        f"got {combined_dims}"
+                    )
 
             # Split combined inputs
             mean, std_raw = th.split(inputs, mean_std_dims, -1)
@@ -104,11 +107,12 @@ class Normal(Module):
         else:
             # Check shape of the combined inputs
             combined_dims = inputs.shape[-1]
-            if combined_dims!=2:
-                raise ValueError(
-                    "expect the shape of the last dimension of combined inputs to be 2, "
-                    f"got {combined_dims}"
-                )
+            if not is_scripting() and not is_tracing():
+                if combined_dims!=2:
+                    raise ValueError(
+                        "expect the shape of the last dimension of combined inputs to be 2, "
+                        f"got {combined_dims}"
+                    )
             
             # Split combined inputs
             mean = inputs[..., 0]

@@ -1,29 +1,32 @@
-from typing import NamedTuple, Protocol
-from mltk.types import StrDict
-from mltk.types.gym import O, A, R
+from __future__ import annotations
 
-import numpy as np
-import torch as th
+from typing import TYPE_CHECKING, Any, Generic, Optional
+from dataclasses import dataclass, field
+from mltk.types.gym import O, A, R, _AbstractEnv
+
+from collections import defaultdict
+
+from mltk.engine import State
+
+if TYPE_CHECKING:
+    from .agent import RLAgentBase
 
 __all__ = [
-    "Step",
+    "RLState",
     "Transition"
 ]
 
-class Step(NamedTuple):
-    """\
-    Information of the current step in RL training or execution.
-    
-    Attributes:
-        episodes: Number of episodes.
-        iterations: Number of iterations.
-        episode_iterations: Number of iterations within the current episode.
-    """
-    episodes: int
-    iterations: int
-    episode_iterations: int
+@dataclass(eq=False)
+class RLState(State, Generic[O, A, R]):
+    agent: RLAgentBase[O, A, R]
+    env: _AbstractEnv[O, A, R]
 
-class Transition(NamedTuple):
+    training: bool = False
+    metrics: dict[str, Any] = field(default_factory=lambda: defaultdict(lambda: 0.))
+    transition: Optional[Transition] = None
+
+@dataclass(eq=False, frozen=True)
+class Transition(Generic[O, A, R]):
     """\
     Information of the transition to the next state in an RL environment.
     
@@ -40,4 +43,4 @@ class Transition(NamedTuple):
     reward: R
     next_observation: O
     done: bool
-    extra: StrDict
+    extra: dict[str, Any]

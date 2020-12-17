@@ -1,5 +1,8 @@
-from typing import Callable, Dict, Iterable, List, Mapping, Optional, Union, overload
-from typing_extensions import Protocol
+from __future__ import annotations
+
+from typing import Optional, Protocol, Union, overload
+from collections.abc import Callable, Iterable, Mapping
+from typing_extensions import TypeAlias
 from mltk.types import Kwargs
 
 from itertools import count
@@ -18,20 +21,20 @@ __all__ = [
 ]
 
 # A mathmatical function to be minimized
-Func = Callable[[], th.Tensor]
+Func: TypeAlias = "Callable[[], th.Tensor]"
 
 class StopCond(Protocol):
     """ A callable protocol that determines whether to stop optimization or not. """
     def __call__(self, *, iterations: int, objectives: th.Tensor) -> th.Tensor: ...
 
 # Group of parameters to be optimized
-_Params = Union[th.Tensor, Iterable[th.Tensor], Module]
+_Params: TypeAlias = "Union[th.Tensor, Iterable[th.Tensor], Module]"
 # PyTorch optimizer factory
-_OptimFactory = Callable[..., TorchOptim]
+_OptimFactory: TypeAlias = "Callable[..., TorchOptim]"
 # Learning rate scheduler factory
-_LRSchedFactory = Callable[..., _LRScheduler]
+_LRSchedFactory: TypeAlias = "Callable[..., _LRScheduler]"
 
-_DEFAULT_OPTIM_GROUPS: Dict[str, Kwargs] = {"_default": {}}
+_DEFAULT_OPTIM_GROUPS: dict[str, Kwargs] = {"default": {}}
 
 class Optimizer():
     """\
@@ -46,82 +49,75 @@ class Optimizer():
         lr_sched_params: Learning rate scheduler settings.
     """
 
-    __slots__ = (
-        "optim_factory",
-        "optim_params",
-        "lr_sched_factory",
-        "optim_groups",
-        "lr_sched_params",
-        "_attached_params",
-        "_optim",
-        "_lr_sched"
-    )
-
-    def __init__(self, optim_factory: _OptimFactory, optim_params: Kwargs = {},
-        optim_groups: Mapping[str, Kwargs] = _DEFAULT_OPTIM_GROUPS,
-        lr_sched_factory: Optional[_LRSchedFactory] = None,
-        lr_sched_params: Kwargs = {}):
+    def __init__(self, optim_factory: _OptimFactory, optim_config: Kwargs = {},
+        groups_config: Mapping[str, Kwargs] = _DEFAULT_OPTIM_GROUPS,
+        lr_sched_factory: Optional[_LRSchedFactory] = None, lr_sched_config: Kwargs = {},
+        clip_max_norm: Optional[float] = None, clip_norm_type: int = 2,
+        clip_max_value: Optional[float] = None):
         self.optim_factory = optim_factory
-        self.optim_params = dict(optim_params)
-        self.optim_groups = dict(optim_groups)
+        self.optim_config = dict(optim_config)
+        self.groups_config = dict(groups_config)
         self.lr_sched_factory = lr_sched_factory
-        self.lr_sched_params = dict(lr_sched_params)
+        self.lr_sched_config = dict(lr_sched_config)
+        self.clip_max_norm = clip_max_norm
+        self.clip_norm_type = clip_norm_type
+        self.clip_max_value = clip_max_value
 
-        # Attached parameters
-        self._attached_params: Dict[str, List[th.Tensor]] = {}
+        # Bound parameter groups
+        self._bound_groups: dict[str, list[th.Tensor]] = {}
         # PyTorch optimizer
         self._optim: Optional[TorchOptim] = None
         # PyTorch learning rate scheduler (optional)
         self._lr_sched: Optional[_LRScheduler] = None
 
     @overload
-    def attach_params(self, params: _Params, group_name: str = "_default") -> "Optimizer": ...
+    def bind(self, group_name: str, *params: _Params) -> Optimizer: ...
 
-    @overload
-    def attach_params(self, **params_kwargs: _Params) -> "Optimizer": ...
+    # TODO: signature of bind
 
-    def attach_params(self, params: Optional[_Params] = None, group_name: str = "_default",
-        **params_kwargs: _Params) -> "Optimizer":
-        if params is not None:
-            # No other parameters can be provided beyond the given group
-            if params_kwargs:
-                raise ValueError("parameters cannot be provided for other groups")
-            params_kwargs = {group_name: params}
-        
-        optim_groups = self.optim_groups
-        attached_params = self._attached_params
-        
-        for group_name, new_params in params_kwargs.items():
-            # Check existance of group
-            if group_name not in optim_groups:
-                raise KeyError(f"non-existant parameter group: {group_name}")
-            
+    def bind(self, group_name: str, *params: _Params) -> Optimizer:
+        # Check existance of group
+        if group_name not in self.groups_config:
+            raise KeyError(f"non-existant parameter group: {group_name}")
+
+        group_params = self._bound_groups.setdefault(group_name, [])
+        for new_params in params:
             # Convert or wrap parameters as an iterable
             if isinstance(new_params, th.Tensor):
                 new_params = (new_params,)
             elif isinstance(new_params, Module):
                 new_params = new_params.parameters()
             # Append new parameters to the group
-            group_params = attached_params.setdefault(group_name, [])
             group_params.extend(new_params)
         
         return self
     
-    def step(self, objective: Optional[th.Tensor] = None, retain_graph: bool = False,
-        create_graph: bool = False, clip_norm=None) -> "Optimizer":
+    def step(self, *objectives: th.Tensor, retain_graph: bool = False, create_graph: bool = False
+        ) -> Optimizer:
         optim = self._optim
         lr_sched = self._lr_sched
         # Do nothing if optimizer does not exist
         if optim is None:
-            pass
+            return
 
         # Back-propagate gradients from the objective
-        if objective is not None:
+        for objective in objectives:
             objective.backward(retain_graph=retain_graph, create_graph=create_graph)
-        # Clip gradients
-        if clip_norm is not None:
-            for group in optim.param_groups:
-                clip_grad_norm_(group["params"], clip_norm)
+        
+        # Clip gradients for parameter groups
+        for group in optim.param_groups:
+            group_params = group["params"]
+            # Clip by norm
+            max_norm = group.get("clip_max_norm", self.clip_max_norm)
+            if max_norm is not None:
+                norm_type = group.get("clip_norm_type", self.clip_norm_type)
+                clip_grad_norm_(group_params, max_norm, norm_type)
+                continue
+            # Clip by value
+            max_value = group.get("clip_max_value", self.clip_max_value)
+            if max_value is not None:
+                clip_grad_value_(group_params, max_value)
+                continue
         
         # Step the optimizer
         optim.step()
@@ -143,21 +139,22 @@ class Optimizer():
         return self
 
     def reset(self) -> "Optimizer":
-        optim_groups = self.optim_groups
+        groups_config = self.groups_config
         lr_sched_factory = self.lr_sched_factory
-        attached_params = self._attached_params
+        bound_groups = self._bound_groups
 
-        # Parameters must be provided for all groups
-        if len(attached_params)<len(optim_groups):
-            raise ValueError("parameters must be provided for all groups")
+        # Parameters must be bound for all groups
+        if len(bound_groups)<len(groups_config):
+            raise ValueError("parameters must be bound for all groups")
+
         # Create PyTorch optimizer from parameters and settings
         self._optim = optim = self.optim_factory((
-            {"params": attached_params[group_name], **group_settings} \
-            for group_name, group_settings in optim_groups.items()
-        ), **self.optim_params)
+            {"params": bound_groups[group_name], **group_config} \
+            for group_name, group_config in groups_config.items()
+        ), **self.optim_config)
         # Create PyTorch learning rate scheduler
         if lr_sched_factory:
-            self._lr_sched = lr_sched_factory(optim, **self.lr_sched_params)
+            self._lr_sched = lr_sched_factory(optim, **self.lr_sched_config)
         
         return self
 

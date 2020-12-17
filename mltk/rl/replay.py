@@ -35,7 +35,7 @@ class ReplayBuffer():
             done=th.bool
         ) # type: ignore
         # Create replay data buffer from the schema
-        self.buf = buf = RecDeque.from_schema(replay_schema, max_len=capacity)
+        self.buf = RecDeque.from_schema(replay_schema, max_len=capacity)
 
         # Number of steps in the replay buffer
         self._n_steps = 0

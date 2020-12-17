@@ -13,7 +13,7 @@ class GeneratorMetric(Metric[T]):
     __slots__ = ("f", "src", "args", "kwargs", "_gen", "_value")
 
     def __init__(self, f: GenMetricFunc[T, U], src: Metric[U], triggers: Triggers, *,
-        args: Args = (), kwargs: Kwargs = {}, ):
+        args: Args = (), kwargs: Kwargs = {}):
         super().__init__(triggers=triggers)
         
         self.f = f
@@ -59,8 +59,8 @@ class GeneratorMetric(Metric[T]):
     def compute(self) -> T:
         return self._value
 
-    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
+    def attach(self, engine: Engine, name: str, groups: Union[None, str, Iterable[str]] = None):
         # Attach source metric
         attach_dependencies(engine, (self.src,))
         # Attach self
-        super().attach(engine, name)
+        super().attach(engine, name, groups)

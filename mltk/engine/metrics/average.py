@@ -47,7 +47,7 @@ class Average(Metric[TensorT]):
 
         return self._avg
     
-    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
+    def attach(self, engine: Engine, name: str, groups: Union[None, str, Iterable[str]] = None):
         # Attach source metric
         attach_dependencies(engine, (self.src,))
         # Attach self
@@ -88,7 +88,7 @@ class RunningAverage(Metric[TensorT]):
 
         return self._avg
 
-    def attach(self, engine: Engine, name: str, groups: Union[str, Iterable[str]] = "default"):
+    def attach(self, engine: Engine, name: str, groups: Union[None, str, Iterable[str]] = None):
         # Attach source metric
         attach_dependencies(engine, (self.src,))
         # Attach self
