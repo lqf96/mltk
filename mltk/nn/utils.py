@@ -53,7 +53,7 @@ class Lambda(nn.Module):
         return self.f(*args, **kwargs)
 
 class RepeatLayers(nn.Sequential):
-    def __init__(self, layers, *args, times: int):
+    def __init__(self, layers, times: int):
         all_layers: list[nn.Module] = []
         
         for _ in range(times):

@@ -52,7 +52,7 @@ class Optimizer():
     def __init__(self, optim_factory: _OptimFactory, optim_config: Kwargs = {},
         groups_config: Mapping[str, Kwargs] = _DEFAULT_OPTIM_GROUPS,
         lr_sched_factory: Optional[_LRSchedFactory] = None, lr_sched_config: Kwargs = {},
-        clip_max_norm: Optional[float] = None, clip_norm_type: int = 2,
+        clip_max_norm: Optional[float] = None, clip_norm_type: float = 2,
         clip_max_value: Optional[float] = None):
         self.optim_factory = optim_factory
         self.optim_config = dict(optim_config)

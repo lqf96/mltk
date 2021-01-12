@@ -21,7 +21,17 @@ class MultivariateNormalDiag(thd.LowRankMultivariateNormal):
         cov_diag = scale_diag.square()
 
         super().__init__(loc, cov_factor, cov_diag, validate_args=validate_args)
-    
+
+    def detach(self):
+        new = MultivariateNormalDiag.__new__(MultivariateNormalDiag)
+        super(MultivariateNormalDiag, new).__init__(
+            self.loc.detach(),
+            self.cov_factor,
+            self.cov_diag.detach(),
+            validate_args=self._validate_args
+        )
+        return new
+
     @property
     def scale_diag(self) -> th.Tensor:
         return self.cov_diag.sqrt()
